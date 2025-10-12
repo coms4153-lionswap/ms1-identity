@@ -1,0 +1,104 @@
+swagger: "2.0"
+info:
+  title: LionSwap Identity & Accounts API
+  version: "0.1.0"
+  description: Columbia LionMail-authenticated user identities
+schemes:
+  - http
+basePath: /
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /users:
+    get:
+      summary: List users
+      tags: [users]
+      responses:
+        200:
+          description: OK
+          schema:
+            type: array
+            items:
+              $ref: "#/definitions/User"
+    post:
+      summary: Create user
+      tags: [users]
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: "#/definitions/UserCreate"
+      responses:
+        201:
+          description: Created
+          headers:
+            Location:
+              type: string
+              description: URI of the created resource
+  /users/{uni}:
+    parameters:
+      - name: uni
+        in: path
+        required: true
+        type: string
+    get:
+      summary: Get user by uni
+      tags: [users]
+      responses:
+        200:
+          description: OK
+          schema:
+            $ref: "#/definitions/User"
+        404:
+          description: Not Found
+    put:
+      summary: Replace user info with uni
+      tags: [users]
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: "#/definitions/UserUpdate"
+      responses:
+        204:
+          description: No Content
+    delete:
+      summary: Delete user with uni
+      tags: [users]
+      responses:
+        204:
+          description: No Content
+
+definitions:
+  User:
+    type: object
+    required: [uni, student_name, email]
+    properties:
+      uni: { type: string, example: "ab1234" }
+      student_name: { type: string, example: "Sally Go" }
+      major: { type: string, example: "CS" }
+      email: { type: string, format: email, example: "sg####@columbia.edu" }
+      phone: { type: string, nullable: true }
+      created_at: { type: string, format: date-time }
+      updated_at: { type: string, format: date-time }
+
+  UserCreate:
+    type: object
+    required: [uni, student_name, email]
+    properties:
+      uni: { type: string }
+      student_name: { type: string }
+      major: { type: string }
+      email: { type: string, format: email }
+      phone: { type: string }
+
+  UserUpdate:
+    type: object
+    properties:
+      student_name: { type: string }
+      major: { type: string }
+      phone: { type: string }
