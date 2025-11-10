@@ -64,14 +64,26 @@ paths:
           schema:
             $ref: "#/definitions/UserUpdate"
       responses:
-        204:
-          description: No Content
+        200:
+          description: Updated
+          schema:
+            $ref: "#/definitions/User"
+        404:
+          description: Not Found
     delete:
       summary: Delete user with uni
       tags: [users]
       responses:
-        204:
-          description: No Content
+        200:
+          description: Deleted
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: 'Successfully deleted "ab1234" user'
+        404:
+          description: Not Found
 
 definitions:
   User:
