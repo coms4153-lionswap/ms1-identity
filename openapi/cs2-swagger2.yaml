@@ -1,0 +1,47 @@
+swagger: "2.0"
+info:
+  title: LionSwap
+  version: "0.1.0"
+  description: Columbia LionMail–authenticated user identities (UNI, profile).
+basePath: /
+schemes: [http]
+consumes: [application/json]
+produces: [application/json]
+paths:
+  /composite/users/{uni}:
+    delete:
+      summary: Delete a user and their listed items
+      parameters:
+        - name: uni
+          in: path
+          required: true
+          type: string
+      responses:
+        200:
+          description: Deleted
+          schema:
+            type: object
+            properties:
+              ms1_identity: { type: string, enum: [deleted, not_found] }
+              ms2_catalog:  { type: string, enum: [deleted, none, not_found] }
+        207:
+          description: Partial success
+          schema:
+            type: object
+            properties:
+              ms1_identity: { type: string }
+              ms2_catalog:  { type: string }
+              errors:
+                type: array
+                items: { type: string }
+        409:
+          description: Conflict (active items prevent deletion)
+          schema:
+            type: object
+            properties:
+              reason: { type: string, example: "Active reservations/sales exist" }
+              blocked_items:
+                type: array
+                items: { type: string }
+        404:
+          description: User not found

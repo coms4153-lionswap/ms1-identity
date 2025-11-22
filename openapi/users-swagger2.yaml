@@ -38,6 +38,8 @@ paths:
             Location:
               type: string
               description: URI of the created resource
+          schema:
+            $ref: "#/definitions/User"
   /users/{uni}:
     parameters:
       - name: uni
@@ -46,18 +48,32 @@ paths:
         type: string
     get:
       summary: Get user by uni
-      tags: [users]
+      tags: [ users ]
+      parameters:
+        - in: header
+          name: If-None-Match
+          type: string
+          required: false
       responses:
         200:
           description: OK
+          headers:
+            ETag:
+              type: string
           schema:
             $ref: "#/definitions/User"
+        304:
+          description: Not Modified
         404:
           description: Not Found
     put:
       summary: Replace user info with uni
-      tags: [users]
+      tags: [ users ]
       parameters:
+        - in: header
+          name: If-Match
+          type: string
+          required: true
         - in: body
           name: body
           required: true
@@ -66,10 +82,18 @@ paths:
       responses:
         200:
           description: Updated
+          headers:
+            ETag:
+              type: string
           schema:
             $ref: "#/definitions/User"
+        412:
+          description: ETag mismatch
+        428:
+          description: If-Match required
         404:
           description: Not Found
+
     delete:
       summary: Delete user with uni
       tags: [users]
@@ -82,8 +106,47 @@ paths:
               message:
                 type: string
                 example: 'Successfully deleted "ab1234" user'
-        404:
-          description: Not Found
+        404: { description: Not Found }
+
+  /users/{uni}/export:
+    post:
+      summary: Start user export (async)
+      tags: [users]
+      parameters:
+        - name: uni
+          in: path
+          required: true
+          type: string
+      responses:
+        202:
+          description: Accepted
+          schema:
+            type: object
+            properties:
+              operation_id: { type: string }
+              _links:
+                $ref: "#/definitions/Links"
+
+  /operations/{opId}:
+    get:
+      summary: Get async operation status
+      tags: [users]
+      parameters:
+        - name: opId
+          in: path
+          required: true
+          type: string
+      responses:
+        200:
+          description: OK
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [pending, running, succeeded, failed]
+              result:
+                type: object
 
 definitions:
   User:
@@ -114,3 +177,11 @@ definitions:
       student_name: { type: string }
       major: { type: string }
       phone: { type: string }
+  Link:
+    type: object
+    properties: { href: { type: string } }
+    required: [href]
+  Links:
+    type: object
+    additionalProperties:
+      $ref: "#/definitions/Link"
