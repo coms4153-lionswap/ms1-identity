@@ -3,13 +3,18 @@ info:
   title: LionSwap Identity & Accounts API
   version: "0.1.0"
   description: Columbia LionMail-authenticated user identities
-schemes:
-  - http
+
+# --- IMPORTANT FOR CLOUD RUN ---
+host: ms1-identity-157498364441.us-east1.run.app
 basePath: /
+schemes:
+  - https
+
 consumes:
   - application/json
 produces:
   - application/json
+
 paths:
   /users:
     get:
@@ -22,6 +27,7 @@ paths:
             type: array
             items:
               $ref: "#/definitions/User"
+
     post:
       summary: Create user
       tags: [users]
@@ -40,15 +46,17 @@ paths:
               description: URI of the created resource
           schema:
             $ref: "#/definitions/User"
+
   /users/{uni}:
     parameters:
       - name: uni
         in: path
         required: true
         type: string
+
     get:
       summary: Get user by uni
-      tags: [ users ]
+      tags: [users]
       parameters:
         - in: header
           name: If-None-Match
@@ -66,9 +74,10 @@ paths:
           description: Not Modified
         404:
           description: Not Found
+
     put:
       summary: Replace user info with uni
-      tags: [ users ]
+      tags: [users]
       parameters:
         - in: header
           name: If-Match
@@ -106,7 +115,8 @@ paths:
               message:
                 type: string
                 example: 'Successfully deleted "ab1234" user'
-        404: { description: Not Found }
+        404:
+          description: Not Found
 
   /users/{uni}/export:
     post:
@@ -177,10 +187,13 @@ definitions:
       student_name: { type: string }
       major: { type: string }
       phone: { type: string }
+
   Link:
     type: object
-    properties: { href: { type: string } }
+    properties:
+      href: { type: string }
     required: [href]
+
   Links:
     type: object
     additionalProperties:
