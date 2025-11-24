@@ -9,6 +9,8 @@ host: ms1-identity-157498364441.us-east1.run.app
 basePath: /
 schemes:
   - https
+  - http
+
 
 consumes:
   - application/json
@@ -32,10 +34,13 @@ paths:
             properties:
               ms1_identity:
                 type: string
-                enum: [deleted, not_found]
+                example: "deleted"
               ms2_catalog:
                 type: string
-                enum: [deleted, none, not_found]
+                example: "deleted"
+              message:
+                type: string
+                example: "User and all items deleted successfully"
 
         207:
           description: Partial success (one service failed)
@@ -44,12 +49,15 @@ paths:
             properties:
               ms1_identity:
                 type: string
+                example: "deleted"
               ms2_catalog:
                 type: string
+                example: "failed:500"
               errors:
                 type: array
                 items:
                   type: string
+                example: ["ms2_catalog error: Connection timeout"]
 
         409:
           description: Conflict — blocked items prevent deletion
@@ -63,6 +71,30 @@ paths:
                 type: array
                 items:
                   type: string
+                example: ["item123", "item456"]
+              message:
+                type: string
+                example: "Cannot delete user with active reservations or sold items"
 
         404:
           description: User not found
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "User not found"
+              uni:
+                type: string
+                example: "ab1234"
+
+        503:
+          description: Service unavailable
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Catalog service unavailable"
+              details:
+                type: string

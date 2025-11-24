@@ -9,6 +9,8 @@ host: ms1-identity-157498364441.us-east1.run.app
 basePath: /
 schemes:
   - https
+  - http
+
 
 consumes:
   - application/json
@@ -118,58 +120,75 @@ paths:
         404:
           description: Not Found
 
-  /users/{uni}/export:
-    post:
-      summary: Start user export (async)
-      tags: [users]
-      parameters:
-        - name: uni
-          in: path
-          required: true
-          type: string
-      responses:
-        202:
-          description: Accepted
-          schema:
-            type: object
-            properties:
-              operation_id: { type: string }
-              _links:
-                $ref: "#/definitions/Links"
-
-  /operations/{opId}:
+  /users/{uni}/profile:
+    parameters:
+      - name: uni
+        in: path
+        required: true
+        type: string
     get:
-      summary: Get async operation status
+      summary: Get user profile (relative path)
+      description: |
+        Relative path endpoint demonstrating HATEOAS principles.
+        Returns a subset of user data focused on profile information.
+        This endpoint follows the pattern: /users/{uni}/profile
       tags: [users]
       parameters:
-        - name: opId
-          in: path
-          required: true
+        - in: header
+          name: If-None-Match
           type: string
+          required: false
       responses:
         200:
           description: OK
+          headers:
+            ETag:
+              type: string
           schema:
-            type: object
-            properties:
-              status:
-                type: string
-                enum: [pending, running, succeeded, failed]
-              result:
-                type: object
+            $ref: "#/definitions/UserProfile"
+        304:
+          description: Not Modified
+        404:
+          description: Not Found
 
 definitions:
   User:
     type: object
     required: [uni, student_name, email]
     properties:
+      user_id: { type: integer, format: int64, example: 1 }
       uni: { type: string, example: "ab1234" }
       student_name: { type: string, example: "Sally Go" }
-      major: { type: string, example: "CS" }
+      dept_name: { type: string, example: "CS" }
       email: { type: string, format: email, example: "sg####@columbia.edu" }
       phone: { type: string, nullable: true }
-      created_at: { type: string, format: date-time }
-      updated_at: { type: string, format: date-time }
+      avatar_url: { type: string, nullable: true }
+      credibility_score: { type: number, format: float, example: 0.0 }
+      last_seen_at: { type: string, format: date-time, nullable: true }
+      _links:
+        type: object
+        description: HATEOAS links for navigation
+        properties:
+          self:
+            $ref: "#/definitions/Link"
+          profile:
+            $ref: "#/definitions/Link"
+          update:
+            allOf:
+              - $ref: "#/definitions/Link"
+              - type: object
+                properties:
+                  method:
+                    type: string
+                    example: "PUT"
+          delete:
+            allOf:
+              - $ref: "#/definitions/Link"
+              - type: object
+                properties:
+                  method:
+                    type: string
+                    example: "DELETE"
 
   UserCreate:
     type: object
@@ -177,24 +196,55 @@ definitions:
     properties:
       uni: { type: string }
       student_name: { type: string }
-      major: { type: string }
+      dept_name: { type: string }
       email: { type: string, format: email }
       phone: { type: string }
+      avatar_url: { type: string }
 
   UserUpdate:
     type: object
     properties:
       student_name: { type: string }
-      major: { type: string }
+      dept_name: { type: string }
       phone: { type: string }
+
+  UserProfile:
+    type: object
+    description: User profile information (relative path response)
+    properties:
+      uni: { type: string, example: "ab1234" }
+      student_name: { type: string, example: "Sally Go" }
+      dept_name: { type: string, example: "CS" }
+      avatar_url: { type: string, nullable: true }
+      credibility_score: { type: number, format: float, example: 0.0 }
+      last_seen_at: { type: string, format: date-time, nullable: true }
+      _links:
+        type: object
+        description: HATEOAS links for navigation
+        properties:
+          self:
+            $ref: "#/definitions/Link"
+          user:
+            $ref: "#/definitions/Link"
+          update:
+            allOf:
+              - $ref: "#/definitions/Link"
+              - type: object
+                properties:
+                  method:
+                    type: string
+                    example: "PUT"
 
   Link:
     type: object
+    description: HATEOAS link object
     properties:
-      href: { type: string }
+      href: { type: string, description: "Relative path to the resource" }
+      method: { type: string, description: "HTTP method (for action links)", required: false }
     required: [href]
 
   Links:
     type: object
+    description: Collection of HATEOAS links
     additionalProperties:
       $ref: "#/definitions/Link"

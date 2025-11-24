@@ -1,23 +1,55 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>LionSwap Identity – Swagger UI</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css">
+  <title>LionSwap API – Swagger UI</title>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" />
   <style>
-    body { margin: 0; }
-    #swagger-ui { max-width: 1200px; margin: 0 auto; }
+    html {
+      box-sizing: border-box;
+      overflow: -moz-scrollbars-vertical;
+      overflow-y: scroll;
+    }
+    *, *:before, *:after {
+      box-sizing: inherit;
+    }
+    body {
+      margin:0;
+      background: #fafafa;
+    }
   </style>
 </head>
 <body>
   <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-standalone-preset.js"></script>
   <script>
-    window.onload = () => {
-      SwaggerUIBundle({
-        url: "/openapi/users-swagger2.yaml",
-        dom_id: '#swagger-ui'
+    window.onload = function() {
+      // Swagger UI 초기화
+      const ui = SwaggerUIBundle({
+        urls: [
+          { name: "Identity (MS1)", url: "/openapi/users-swagger2.yaml" },
+          { name: "Composite Service (CS2)", url: "/openapi/cs2-swagger2.yaml" }
+        ],
+        url: "/openapi/users-swagger2.yaml", // 기본 URL
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout",
+        validatorUrl: null,
+        tryItOutEnabled: true,
+        persistAuthorization: true
       });
+      
+      window.ui = ui;
+      
+      console.log("Swagger UI initialized with multiple APIs");
     };
   </script>
 </body>

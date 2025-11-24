@@ -1,11 +1,12 @@
-from sqlalchemy import Column, Integer, String, DateTime, DECIMAL
+from sqlalchemy import Column, String, DateTime, DECIMAL
+from sqlalchemy.dialects.mysql import INTEGER
 from app.database import Base
 
 
 class User(Base):
-    __tablename__ = "Users"
+    __tablename__ = "users"
 
-    user_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(INTEGER(unsigned=True), primary_key=True, autoincrement=True)
     uni = Column(String(32), nullable=False)
     student_name = Column(String(120), nullable=False)
     dept_name = Column(String(120))
@@ -14,16 +15,16 @@ class User(Base):
     avatar_url = Column(String(512))
     credibility_score = Column(DECIMAL(4, 2), nullable=False, default=0.00)
     last_seen_at = Column(DateTime)
-def to_dict(self):
-    return {
-        "user_id": self.user_id,
-        "uni": self.uni,
-        "student_name": self.student_name,
-        "dept_name": self.dept_name,
-        "email": self.email,
-        "phone": self.phone,
-        "avatar_url": self.avatar_url,
-        "credibility_score": float(self.credibility_score or 0),
-        "last_seen_at": self.last_seen_at.isoformat() if self.last_seen_at else None,
-        "version": self.version,
-    }
+
+    def to_dict(self):
+        return {
+            "user_id": self.user_id,
+            "uni": self.uni,
+            "student_name": self.student_name,
+            "dept_name": self.dept_name,
+            "email": self.email,
+            "phone": self.phone,
+            "avatar_url": self.avatar_url,
+            "credibility_score": float(self.credibility_score or 0),
+            "last_seen_at": self.last_seen_at.isoformat() if self.last_seen_at else None,
+        }
