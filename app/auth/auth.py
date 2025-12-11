@@ -221,15 +221,8 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
                 frontend_url = FRONTEND_URL
             
             # Simple redirect to homepage without parameters
-            response = RedirectResponse(url=frontend_url)
-            response.set_cookie(
-                key="session_id",
-                value=secrets.token_urlsafe(32),
-                httponly=True,
-                samesite="lax",
-                max_age=86400
-            )
-            return response
+            redirect_url = f"{FRONTEND_URL}#access_token={token['access_token']}&id_token={token.get('id_token', '')}&email={user_info['email']}&user_id={user.id}"
+            return RedirectResponse(url=redirect_url)
     
     # Extract Google access_token (to pass to JWT service)
     google_access_token = token.get("access_token")

@@ -52,11 +52,10 @@ app.add_middleware(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://storage.googleapis.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["ETag", "Location", "Content-Type"],  # Allow client access to ETag
 )
 
 @app.on_event("startup")
