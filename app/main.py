@@ -2,12 +2,15 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from app.users import users
-from app.composite import router as composite_router
+from app.auth.auth import router as auth_router
 import pathlib
 from dotenv import load_dotenv
 import logging
 import sys
+import secrets
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -29,14 +32,31 @@ app = FastAPI(
     description="LionSwap User API",
 )
 
-# CORS 미들웨어 추가
+# Add Session middleware (required for OAuth2)
+# In production, get secret key from environment variable
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", secrets.token_urlsafe(32))
+
+# Detect Cloud Run environment
+is_cloud_run = os.getenv("K_SERVICE") is not None
+
+# For Cloud Run: same_site="none" requires Secure=True (https_only=True sets this)
+# This allows cookies to work with cross-site OAuth redirects
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET_KEY,
+    max_age=86400,  # 24 hours
+    same_site="none" if is_cloud_run else "lax",  # Cloud Run needs 'none' for cross-site OAuth
+    https_only=True if is_cloud_run else False,  # Secure flag required for same_site="none"
+)
+
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["ETag", "Location", "Content-Type"],  # ETag를 클라이언트에서 접근 가능하도록
+    expose_headers=["ETag", "Location", "Content-Type"],  # Allow client access to ETag
 )
 
 @app.on_event("startup")
@@ -97,13 +117,13 @@ else:
     STATIC_DIR = BASE_DIR / "static"
 
 # ------------------------------------------------------------
-# Routers (Atomic + Composite)
+# Routers (Atomic + Auth)
 # ------------------------------------------------------------
 app.include_router(users.router)
-app.include_router(composite_router.router)
+app.include_router(auth_router)
 
 # ------------------------------------------------------------
-# Serve OpenAPI YAML (MS1 + Composite)
+# Serve OpenAPI YAML (MS1)
 # ------------------------------------------------------------
 
 @app.get("/openapi/users-swagger2.yaml", include_in_schema=False)
@@ -134,30 +154,30 @@ def get_users_yaml(request: Request):
     
     content = yaml_path.read_text(encoding="utf-8")
     
-    # 동적으로 host 변경
+    # Dynamically change host
     current_host = request.url.hostname
     current_port = request.url.port
     current_scheme = request.url.scheme
     
-    # Cloud Run 환경 감지 (K_SERVICE 환경 변수 또는 .run.app 도메인)
+    # Detect Cloud Run environment (K_SERVICE environment variable or .run.app domain)
     import os
     is_cloud_run = os.getenv("K_SERVICE") is not None or current_host.endswith(".run.app")
     
-    # 0.0.0.0을 localhost로 변경
+    # Change 0.0.0.0 to localhost
     if current_host == "0.0.0.0":
         current_host = "localhost"
     
-    # Cloud Run이면 포트 제거, 로컬이면 포트 포함
+    # Remove port for Cloud Run, include port for local
     if is_cloud_run:
-        # Cloud Run: 포트 없이 host만 사용, https 사용 (포트는 항상 무시)
-        # host에서 포트가 포함되어 있으면 제거
+        # Cloud Run: use host only without port, use https (port is always ignored)
+        # Remove port if included in host
         if ":" in current_host:
             dynamic_host = current_host.split(":")[0]
         else:
             dynamic_host = current_host
         dynamic_scheme = "https"
     else:
-        # 로컬 환경: 포트 포함
+        # Local environment: include port
         if current_port:
             dynamic_host = f"{current_host}:{current_port}"
         else:
@@ -167,7 +187,7 @@ def get_users_yaml(request: Request):
                 dynamic_host = f"{current_host}:8080"
         dynamic_scheme = current_scheme
     
-    # host 라인을 현재 요청의 host로 교체
+    # Replace host line with current request's host
     content = re.sub(
         r'^host:\s*.*$',
         f'host: {dynamic_host}',
@@ -175,9 +195,9 @@ def get_users_yaml(request: Request):
         flags=re.MULTILINE
     )
     
-    # schemes 변경
+    # Change schemes
     if is_cloud_run:
-        # Cloud Run: https만 사용
+        # Cloud Run: use https only
         content = re.sub(
             r'^schemes:\s*\n(\s*-\s*(?:https|http)\s*\n?)+',
             'schemes:\n  - https\n',
@@ -185,103 +205,7 @@ def get_users_yaml(request: Request):
             flags=re.MULTILINE
         )
     elif current_host in ["localhost", "127.0.0.1", "0.0.0.0"]:
-        # 로컬 환경: http만 사용
-        content = re.sub(
-            r'^schemes:\s*\n(\s*-\s*(?:https|http)\s*\n?)+',
-            'schemes:\n  - http\n',
-            content,
-            flags=re.MULTILINE
-        )
-    
-    logger.info(f"YAML host changed to: {dynamic_host}, scheme: {dynamic_scheme}, is_cloud_run: {is_cloud_run}")
-    
-    return Response(
-        content=content,
-        media_type="text/yaml",
-        headers={
-            "Cache-Control": "no-store",
-            "Access-Control-Allow-Origin": "*",
-            "Content-Type": "text/yaml; charset=utf-8"
-        }
-    )
-
-@app.get("/openapi/cs2-swagger2.yaml", include_in_schema=False)
-def get_cs2_yaml(request: Request):
-    # Try multiple possible paths
-    possible_paths = [
-        BASE_DIR / "openapi" / "cs2-swagger2.yaml",
-        pathlib.Path("/app/openapi/cs2-swagger2.yaml"),
-        pathlib.Path("openapi/cs2-swagger2.yaml"),
-    ]
-    
-    yaml_path = None
-    for path in possible_paths:
-        if path.exists():
-            yaml_path = path
-            break
-    
-    if not yaml_path:
-        logger.error(f"YAML file not found. Tried: {possible_paths}")
-        raise HTTPException(404, f"File not found. Tried: {possible_paths}")
-    
-    logger.info(f"Serving YAML file: {yaml_path}")
-    from fastapi.responses import Response
-    import re
-    
-    content = yaml_path.read_text(encoding="utf-8")
-    
-    # 동적으로 host 변경
-    current_host = request.url.hostname
-    current_port = request.url.port
-    current_scheme = request.url.scheme
-    
-    # Cloud Run 환경 감지 (K_SERVICE 환경 변수 또는 .run.app 도메인)
-    import os
-    is_cloud_run = os.getenv("K_SERVICE") is not None or current_host.endswith(".run.app")
-    
-    # 0.0.0.0을 localhost로 변경
-    if current_host == "0.0.0.0":
-        current_host = "localhost"
-    
-    # Cloud Run이면 포트 제거, 로컬이면 포트 포함
-    if is_cloud_run:
-        # Cloud Run: 포트 없이 host만 사용, https 사용 (포트는 항상 무시)
-        # host에서 포트가 포함되어 있으면 제거
-        if ":" in current_host:
-            dynamic_host = current_host.split(":")[0]
-        else:
-            dynamic_host = current_host
-        dynamic_scheme = "https"
-    else:
-        # 로컬 환경: 포트 포함
-        if current_port:
-            dynamic_host = f"{current_host}:{current_port}"
-        else:
-            if current_scheme == "https":
-                dynamic_host = current_host
-            else:
-                dynamic_host = f"{current_host}:8080"
-        dynamic_scheme = current_scheme
-    
-    # host 라인을 현재 요청의 host로 교체
-    content = re.sub(
-        r'^host:\s*.*$',
-        f'host: {dynamic_host}',
-        content,
-        flags=re.MULTILINE
-    )
-    
-    # schemes 변경
-    if is_cloud_run:
-        # Cloud Run: https만 사용
-        content = re.sub(
-            r'^schemes:\s*\n(\s*-\s*(?:https|http)\s*\n?)+',
-            'schemes:\n  - https\n',
-            content,
-            flags=re.MULTILINE
-        )
-    elif current_host in ["localhost", "127.0.0.1", "0.0.0.0"]:
-        # 로컬 환경: http만 사용
+        # Local environment: use http only
         content = re.sub(
             r'^schemes:\s*\n(\s*-\s*(?:https|http)\s*\n?)+',
             'schemes:\n  - http\n',
@@ -306,16 +230,18 @@ def get_cs2_yaml(request: Request):
 def get_users_yaml_root():
     return get_users_yaml()
 
-@app.get("/cs2-swagger2.yaml", include_in_schema=False)
-def get_cs2_yaml_root():
-    return get_cs2_yaml()
-
 # ------------------------------------------------------------
 # Swagger UI (custom HTML loading dropdown)
 # ------------------------------------------------------------
 @app.get("/swagger", response_class=HTMLResponse, include_in_schema=False)
 def swagger_ui():
     html = (STATIC_DIR / "swagger.html").read_text(encoding="utf-8")
+    return HTMLResponse(content=html)
+
+@app.get("/test-oauth", response_class=HTMLResponse, include_in_schema=False)
+def test_oauth():
+    """OAuth2 test page"""
+    html = (STATIC_DIR / "test_oauth.html").read_text(encoding="utf-8")
     return HTMLResponse(content=html)
 
 

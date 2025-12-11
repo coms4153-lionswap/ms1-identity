@@ -15,6 +15,7 @@ class User(Base):
     avatar_url = Column(String(512))
     credibility_score = Column(DECIMAL(4, 2), nullable=False, default=0.00)
     last_seen_at = Column(DateTime)
+    google_id = Column(String(255), unique=True, nullable=True)  # Google OAuth ID
 
     def to_dict(self):
         return {
@@ -27,4 +28,5 @@ class User(Base):
             "avatar_url": self.avatar_url,
             "credibility_score": float(self.credibility_score or 0),
             "last_seen_at": self.last_seen_at.isoformat() if self.last_seen_at else None,
+            "google_id": self.google_id,
         }

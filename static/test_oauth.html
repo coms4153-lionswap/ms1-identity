@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth2 테스트 페이지</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4285f4;
+            padding-bottom: 10px;
+        }
+        .button {
+            background-color: #4285f4;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .button:hover {
+            background-color: #357ae8;
+        }
+        .button-secondary {
+            background-color: #34a853;
+        }
+        .button-secondary:hover {
+            background-color: #2d8f47;
+        }
+        .info-box {
+            background-color: #e8f0fe;
+            border-left: 4px solid #4285f4;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .token-display {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .user-info {
+            background-color: #f0f7ff;
+            border: 1px solid #b3d9ff;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .user-info h3 {
+            margin-top: 0;
+            color: #1a73e8;
+        }
+        .error {
+            background-color: #fce8e6;
+            border-left: 4px solid #ea4335;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            color: #c5221f;
+        }
+        .success {
+            background-color: #e6f4ea;
+            border-left: 4px solid #34a853;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            color: #137333;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 OAuth2/OIDC 로그인 테스트</h1>
+        
+        <div class="info-box">
+            <strong>📋 사용 방법:</strong>
+            <ol>
+                <li>"Google로 로그인" 버튼 클릭</li>
+                <li>Google 계정으로 로그인 및 권한 승인</li>
+                <li>자동으로 로그인되며 세션이 쿠키에 저장됩니다</li>
+                <li>"내 정보 가져오기" 버튼으로 사용자 정보 확인</li>
+                <li>"로그아웃" 버튼으로 세션 종료</li>
+            </ol>
+        </div>
+
+        <!-- 로그인 버튼 -->
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="/auth/google/login" class="button">🔵 Google로 로그인</a>
+            <button class="button button-secondary" onclick="getUserInfo()">👤 내 정보 가져오기</button>
+            <button class="button" onclick="logout()">🚪 로그아웃</button>
+        </div>
+
+        <!-- 사용자 정보 표시 영역 -->
+        <div id="user-info-section" style="display: none;">
+            <h2>👤 사용자 정보</h2>
+            <div class="user-info" id="user-info"></div>
+        </div>
+
+        <!-- 메시지 표시 영역 -->
+        <div id="message-section"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+
+        // 페이지 로드 시 사용자 정보 확인
+        window.onload = function() {
+            // 로그인 후 리다이렉트된 경우 사용자 정보 자동 로드
+            getUserInfo();
+        }
+
+        // 사용자 정보 가져오기 (쿠키의 세션 사용)
+        async function getUserInfo() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/me`, {
+                    credentials: 'include'  // 쿠키 포함
+                });
+
+                if (response.ok) {
+                    const userData = await response.json();
+                    displayUserInfo(userData);
+                    showMessage('사용자 정보를 성공적으로 가져왔습니다!', 'success');
+                } else if (response.status === 401) {
+                    // 로그인되지 않음
+                    document.getElementById('user-info-section').style.display = 'none';
+                } else {
+                    const error = await response.json();
+                    showMessage(`오류: ${error.detail || '사용자 정보를 가져올 수 없습니다.'}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`오류: ${error.message}`, 'error');
+            }
+        }
+
+        // 사용자 정보 표시
+        function displayUserInfo(user) {
+            const userInfoDiv = document.getElementById('user-info');
+            userInfoDiv.innerHTML = `
+                <h3>${user.student_name || user.uni}</h3>
+                <p><strong>UNI:</strong> ${user.uni}</p>
+                <p><strong>이메일:</strong> ${user.email}</p>
+                <p><strong>이름:</strong> ${user.student_name || 'N/A'}</p>
+                <p><strong>학과:</strong> ${user.dept_name || 'N/A'}</p>
+                <p><strong>전화번호:</strong> ${user.phone || 'N/A'}</p>
+                <p><strong>신뢰도 점수:</strong> ${user.credibility_score}</p>
+                <p><strong>Google ID:</strong> ${user.google_id || 'N/A'}</p>
+                ${user.avatar_url ? `<p><img src="${user.avatar_url}" alt="프로필 사진" style="max-width: 100px; border-radius: 50%;"></p>` : ''}
+            `;
+            document.getElementById('user-info-section').style.display = 'block';
+        }
+
+        // 로그아웃
+        async function logout() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    document.getElementById('user-info-section').style.display = 'none';
+                    showMessage('로그아웃되었습니다.', 'success');
+                } else {
+                    showMessage('로그아웃 중 오류가 발생했습니다.', 'error');
+                }
+            } catch (error) {
+                showMessage(`오류: ${error.message}`, 'error');
+            }
+        }
+
+        // 메시지 표시
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('message-section');
+            const className = type === 'success' ? 'success' : 'error';
+            messageDiv.innerHTML = `<div class="${className}">${message}</div>`;
+            
+            // 5초 후 메시지 자동 제거
+            setTimeout(() => {
+                messageDiv.innerHTML = '';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
+

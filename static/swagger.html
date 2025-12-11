@@ -27,11 +27,7 @@
     window.onload = function() {
       // Swagger UI 초기화
       const ui = SwaggerUIBundle({
-        urls: [
-          { name: "Identity (MS1)", url: "/openapi/users-swagger2.yaml" },
-          { name: "Composite Service (CS2)", url: "/openapi/cs2-swagger2.yaml" }
-        ],
-        url: "/openapi/users-swagger2.yaml", // 기본 URL
+        url: "/openapi.json", // Use FastAPI's auto-generated OpenAPI schema
         dom_id: '#swagger-ui',
         deepLinking: true,
         presets: [

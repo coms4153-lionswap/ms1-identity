@@ -4,3 +4,7 @@ python-dotenv
 requests
 pymysql
 SQLAlchemy
+authlib
+httpx
+itsdangerous
+email-validator
