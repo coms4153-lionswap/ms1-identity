@@ -15,7 +15,7 @@ class User(Base):
     avatar_url = Column(String(512))
     credibility_score = Column(DECIMAL(4, 2), nullable=False, default=0.00)
     last_seen_at = Column(DateTime)
-    google_id = Column(String(255), unique=True, nullable=True)  # Google OAuth ID
+    google_id = Column(String(255), unique=True, nullable=True)
 
     def to_dict(self):
         return {

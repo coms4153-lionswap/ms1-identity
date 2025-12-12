@@ -151,6 +151,196 @@ paths:
         404:
           description: Not Found
 
+  /users/by-id/{user_id}:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        type: integer
+        format: int64
+        description: User ID (integer)
+    get:
+      summary: Get user by ID
+      description: |
+        Returns user information by user_id (integer).
+        Supports ETag with If-None-Match header (returns 304 Not Modified).
+        Returns ETag header for caching.
+        Includes HATEOAS links.
+      tags: [users]
+      parameters:
+        - in: header
+          name: If-None-Match
+          type: string
+          required: false
+          description: ETag for conditional request
+      responses:
+        200:
+          description: OK
+          headers:
+            ETag:
+              type: string
+              description: ETag for caching
+          schema:
+            $ref: "#/definitions/User"
+        304:
+          description: Not Modified (ETag matches)
+        404:
+          description: User not found
+
+  /users/by-email/{email}:
+    parameters:
+      - name: email
+        in: path
+        required: true
+        type: string
+        format: email
+        description: User email address (must be valid email format)
+    get:
+      summary: Get user by email
+      description: |
+        Returns user_id only for the user with the given email address.
+        This endpoint only accepts valid email format - non-email strings will be rejected.
+        Returns 400 Bad Request for invalid email format.
+        Returns 404 Not Found if user doesn't exist.
+      tags: [users]
+      responses:
+        200:
+          description: OK
+          schema:
+            type: object
+            properties:
+              user_id:
+                type: integer
+                format: int64
+                example: 1
+                description: User ID for the given email
+        400:
+          description: Bad Request - Invalid email format
+        404:
+          description: User not found
+
+  # OAuth2/OIDC Authentication Endpoints
+  /auth/google/login:
+    get:
+      summary: Google OAuth2/OIDC Login
+      description: |
+        Initiates Google OAuth2/OIDC login flow.
+        Redirects user to Google authentication page.
+        Implements OpenID Connect (OIDC) protocol with CSRF protection via state parameter.
+        Scope: openid email profile
+      tags: [authentication]
+      parameters:
+        - in: query
+          name: state
+          type: string
+          required: false
+          description: Optional redirect URL after authentication (for frontend)
+      responses:
+        302:
+          description: Redirect to Google authentication page
+        500:
+          description: OAuth configuration error
+
+  /auth/google/callback:
+    get:
+      summary: OAuth2 Callback
+      description: |
+        Handles Google's OAuth2/OIDC callback.
+        Validates state parameter for CSRF protection.
+        Retrieves user information from Google and creates/updates user in database.
+        Links Google account to existing user by email if google_id not found.
+        Redirects to frontend homepage after successful authentication.
+      tags: [authentication]
+      parameters:
+        - in: query
+          name: code
+          type: string
+          required: true
+          description: Authorization code from Google
+        - in: query
+          name: state
+          type: string
+          required: false
+          description: State parameter for CSRF protection
+      responses:
+        302:
+          description: Redirect to frontend homepage
+        400:
+          description: Authentication failed or invalid callback
+        500:
+          description: Database or server error
+
+  /auth/me:
+    get:
+      summary: Get Current User
+      description: |
+        Retrieves current authenticated user information.
+        Supports JWT token authentication (Authorization: Bearer <token>) or session cookie.
+        Proxies JWT verification to separate JWT service.
+        Falls back to session-based authentication for testing.
+      tags: [authentication]
+      parameters:
+        - in: header
+          name: Authorization
+          type: string
+          required: false
+          description: JWT token (Bearer <token>)
+        - in: cookie
+          name: session_id
+          type: string
+          required: false
+          description: Session cookie (for testing without JWT service)
+      responses:
+        200:
+          description: Current user information
+          schema:
+            $ref: "#/definitions/CurrentUser"
+        401:
+          description: Authentication required
+        404:
+          description: User not found
+
+  /auth/verify-jwt:
+    post:
+      summary: Verify JWT Token
+      description: |
+        Proxies JWT token verification to separate JWT service.
+        Used by other microservices to validate user tokens.
+        Returns token validity and payload if valid.
+      tags: [authentication]
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: "#/definitions/JWTVerifyRequest"
+      responses:
+        200:
+          description: Token verification result
+          schema:
+            $ref: "#/definitions/JWTVerifyResponse"
+        400:
+          description: Token not provided
+        503:
+          description: JWT service unavailable
+
+  /auth/logout:
+    post:
+      summary: Logout
+      description: |
+        Clears session cookies and removes session from store.
+        Returns success message.
+      tags: [authentication]
+      responses:
+        200:
+          description: Logged out successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Logged out successfully."
+
 definitions:
   User:
     type: object
@@ -248,3 +438,56 @@ definitions:
     description: Collection of HATEOAS links
     additionalProperties:
       $ref: "#/definitions/Link"
+
+  # OAuth2/OIDC Definitions
+  CurrentUser:
+    type: object
+    description: Current authenticated user information
+    properties:
+      user_id: { type: integer, format: int64, example: 1 }
+      uni: { type: string, example: "ab1234" }
+      student_name: { type: string, example: "Sally Go" }
+      dept_name: { type: string, example: "CS" }
+      email: { type: string, format: email, example: "sg####@columbia.edu" }
+      phone: { type: string, nullable: true }
+      avatar_url: { type: string, nullable: true }
+      credibility_score: { type: number, format: float, example: 0.0 }
+      last_seen_at: { type: string, format: date-time, nullable: true }
+      google_id: { type: string, nullable: true, description: "Google OAuth ID" }
+
+  JWTVerifyRequest:
+    type: object
+    required: [token]
+    properties:
+      token:
+        type: string
+        description: JWT token to verify
+        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+  JWTVerifyResponse:
+    type: object
+    properties:
+      valid:
+        type: boolean
+        description: Whether the token is valid
+        example: true
+      payload:
+        type: object
+        description: Decoded token payload (if valid)
+        properties:
+          sub:
+            type: string
+            description: Subject (user_id)
+            example: "1"
+          user_id:
+            type: integer
+            description: User ID
+            example: 1
+          exp:
+            type: integer
+            description: Token expiration timestamp
+            example: 1736544000
+      error:
+        type: string
+        description: Error message (if invalid)
+        example: "Token expired"

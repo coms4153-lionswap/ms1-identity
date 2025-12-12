@@ -10,10 +10,7 @@ import re
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-# ---- Pydantic Models ----
-
 class UserCreate(BaseModel):
-    """Request model for creating a user"""
     uni: str
     student_name: str
     email: EmailStr
@@ -22,12 +19,9 @@ class UserCreate(BaseModel):
     avatar_url: Optional[str] = None
 
 class UserUpdate(BaseModel):
-    """Request model for updating a user"""
     student_name: Optional[str] = None
     dept_name: Optional[str] = None
-    phone: Optional[str] = None
-
-# ---- Helpers ----
+        phone: Optional[str] = None
 
 def now_iso() -> str:
     return datetime.utcnow().isoformat(timespec="seconds") + "Z"
@@ -45,38 +39,24 @@ def require_fields(data, fields):
         raise HTTPException(400, f"Missing: {', '.join(missing)}")
 
 def etag_of(user: User) -> str:
-    # ETag based on last_seen_at timestamp
     timestamp = user.last_seen_at.isoformat() if user.last_seen_at else "0"
     return f'W/"{timestamp}"'
 
 def normalize_etag(etag: str) -> str:
-    """
-    Normalize ETag for comparison.
-    Removes quotes and normalizes weak validator format.
-    Handles formats like: W/"value", W/value, "value", value
-    """
     if not etag:
         return ""
     
     etag = etag.strip()
     
-    # Handle weak validator W/
     if etag.startswith('W/'):
-        # Remove W/ prefix
         value = etag[2:].strip()
-        # Remove surrounding quotes
         value = value.strip('"').strip("'")
         return f'W/{value}'
     else:
-        # Remove surrounding quotes
         value = etag.strip('"').strip("'")
         return value
 
 def build_links(uni: str, request: Request) -> dict:
-    """
-    Build HATEOAS links for user resources.
-    Implements relative paths as per RESTful API best practices.
-    """
     base_url = str(request.base_url).rstrip('/')
     return {
         "self": {"href": f"/users/{uni}"},
@@ -84,8 +64,6 @@ def build_links(uni: str, request: Request) -> dict:
         "update": {"href": f"/users/{uni}", "method": "PUT"},
         "delete": {"href": f"/users/{uni}", "method": "DELETE"},
     }
-
-# ---- CRUD API ----
 
 @router.get("", response_model=list[dict])
 async def list_users(request: Request):
@@ -110,7 +88,6 @@ async def list_users(request: Request):
 @router.post("", status_code=201)
 async def create_user(payload: UserCreate, response: Response, request: Request):
     with SessionLocal() as db:
-        # check duplicate
         if db.query(User).filter(User.uni == payload.uni).first():
             raise HTTPException(409, "User already exists")
 
@@ -145,13 +122,6 @@ async def create_user(payload: UserCreate, response: Response, request: Request)
 
 @router.get("/by-email/{email}")
 async def get_user_by_email(email: str = Path(..., description="User email address", pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')):
-    """
-    Get user by email address.
-    Returns user_id for the user with the given email.
-    This endpoint only accepts valid email format - non-email strings will be rejected.
-    Example: GET /users/by-email/user@example.com
-    """
-    # Validate email format (Path pattern validates, but this provides clearer error message)
     email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     if not re.match(email_pattern, email):
         raise HTTPException(
@@ -164,17 +134,12 @@ async def get_user_by_email(email: str = Path(..., description="User email addre
         if not user:
             raise HTTPException(404, "User not found")
         
-        # Return only user_id for email lookup
         return {
             "user_id": user.user_id
         }
 
 @router.get("/by-id/{user_id}")
 async def get_user_by_id(user_id: int, request: Request):
-    """
-    Get user by user_id (integer).
-    Example: GET /users/by-id/123
-    """
     with SessionLocal() as db:
         user = db.query(User).filter(User.user_id == user_id).first()
         if not user:
@@ -182,7 +147,6 @@ async def get_user_by_id(user_id: int, request: Request):
 
         tag = etag_of(user)
 
-        # ETag returns 304 Not Modified
         if_none_match = request.headers.get("If-None-Match")
         if if_none_match and normalize_etag(if_none_match) == normalize_etag(tag):
             return Response(status_code=304, headers={"ETag": tag})
@@ -204,9 +168,6 @@ async def get_user_by_id(user_id: int, request: Request):
 
 @router.get("/{uni}")
 async def get_user(uni: str, request: Request):
-    """
-    Get user by uni (string identifier).
-    """
     with SessionLocal() as db:
         user = db.query(User).filter(User.uni == uni).first()
         if not user:
@@ -214,7 +175,6 @@ async def get_user(uni: str, request: Request):
 
         tag = etag_of(user)
 
-        # ETag returns 304 Not Modified
         if_none_match = request.headers.get("If-None-Match")
         if if_none_match and normalize_etag(if_none_match) == normalize_etag(tag):
             return Response(status_code=304, headers={"ETag": tag})
@@ -249,7 +209,6 @@ async def replace_user(uni: str, payload: UserUpdate, request: Request):
         if normalize_etag(if_match) != normalize_etag(current_etag):
             raise HTTPException(412, "ETag mismatch")
 
-        # Update fields (only provided fields)
         if payload.student_name is not None:
             user.student_name = payload.student_name
         if payload.dept_name is not None:
@@ -257,7 +216,6 @@ async def replace_user(uni: str, payload: UserUpdate, request: Request):
         if payload.phone is not None:
             user.phone = payload.phone
 
-        # Update last_seen_at for ETag
         user.last_seen_at = datetime.utcnow()
 
         db.commit()
@@ -292,15 +250,8 @@ async def delete_user(uni: str):
 
         return {"message": f'Successfully deleted "{uni}" user'}
 
-# ---- Relative Paths (HATEOAS) ----
-
 @router.get("/{uni}/profile")
 async def get_user_profile(uni: str, request: Request):
-    """
-    Get user profile information (relative path).
-    This demonstrates HATEOAS relative paths as per RESTful API best practices.
-    Example: /users/{uni}/profile
-    """
     with SessionLocal() as db:
         user = db.query(User).filter(User.uni == uni).first()
         if not user:
@@ -308,12 +259,10 @@ async def get_user_profile(uni: str, request: Request):
 
         tag = etag_of(user)
 
-        # ETag returns 304 Not Modified
         if_none_match = request.headers.get("If-None-Match")
         if if_none_match and normalize_etag(if_none_match) == normalize_etag(tag):
             return Response(status_code=304, headers={"ETag": tag})
 
-        # Profile-specific data (subset of user data)
         profile_data = {
             "uni": user.uni,
             "student_name": user.student_name,

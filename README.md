@@ -25,22 +25,37 @@ microservice 1(Sally) - Identity & Account
 2. **Create User:** `POST /users`
    - Returns `201 Created` with `Location` header
    - Includes HATEOAS links in response body
+   - Required fields: `uni`, `student_name`, `email`
 
-3. **Get User by UNI:** `GET /users/{uni}`
+3. **Get User by ID:** `GET /users/by-id/{user_id}`
+   - Returns user information by `user_id` (integer)
    - Supports ETag with `If-None-Match` header (returns `304 Not Modified`)
    - Returns ETag header for caching
    - Includes HATEOAS links
 
-4. **Replace User:** `PUT /users/{uni}`
+4. **Get User by Email:** `GET /users/by-email/{email}`
+   - Returns `user_id` only for the user with the given email address
+   - Validates email format (only accepts valid email addresses)
+   - Returns `400 Bad Request` for invalid email format
+   - Returns `404 Not Found` if user doesn't exist
+
+5. **Get User by UNI:** `GET /users/{uni}`
+   - Returns user information by `uni` (string identifier)
+   - Supports ETag with `If-None-Match` header (returns `304 Not Modified`)
+   - Returns ETag header for caching
+   - Includes HATEOAS links
+
+6. **Replace User:** `PUT /users/{uni}`
    - Validates `If-Match` header (returns `412 Precondition Failed` if mismatch)
    - Returns `428 Precondition Required` if `If-Match` header missing
    - Updates ETag on modification
    - Includes HATEOAS links
+   - Allowed fields: `student_name`, `dept_name`, `phone`
 
-5. **Delete User:** `DELETE /users/{uni}`
+7. **Delete User:** `DELETE /users/{uni}`
    - Returns `200 OK` with success message
 
-6. **Get User Profile (Relative Path):** `GET /users/{uni}/profile`
+8. **Get User Profile (Relative Path):** `GET /users/{uni}/profile`
    - Demonstrates HATEOAS relative paths
    - Returns subset of user data (profile information)
    - Supports ETag with `If-None-Match` header
@@ -53,29 +68,36 @@ microservice 1(Sally) - Identity & Account
    - Redirects to Google authentication page
    - Supports OpenID Connect (OIDC) protocol
 
-8. **OAuth2 Callback:** `GET /auth/google/callback`
-   - Handles Google OAuth2 callback
-   - Creates or updates user account with Google information
-   - Returns user information (for JWT token generation in other microservice)
-   - Automatically links existing users by email if Google ID not present
-   - Can redirect to JWT service with user info if `state` parameter provided
+9. **OAuth2 Callback:** `GET /auth/google/callback`
+   - Handles Google OAuth2/OIDC callback
+   - Validates `state` parameter (CSRF protection)
+   - Retrieves user information from Google
+   - Creates or updates user in database
+   - Links Google account to existing user by email if `google_id` not found
+   - Redirects to frontend homepage after successful authentication
 
-9. **Get Current User:** `GET /auth/me`
-   - Returns current authenticated user information
-   - Requires JWT token from other microservice in Authorization header
-   - Validates JWT token with JWT service
-   - Returns user details from database
+10. **Get Current User:** `GET /auth/me`
+    - Retrieves current authenticated user information
+    - Proxies JWT verification to separate JWT service
+    - Falls back to session-based authentication for testing
 
-10. **Verify JWT Token:** `POST /auth/verify-jwt`
-    - Proxies JWT token verification to JWT service
-    - Returns token validity and payload
+11. **Verify JWT Token:** `POST /auth/verify-jwt`
+    - Proxies JWT token verification to separate JWT service
+    - Used by other microservices to validate user tokens
+    - Returns user information if token is valid
 
-**OAuth2 Features:**
-- ✅ Google OAuth2/OIDC integration
-- ✅ Automatic user creation/linking
-- ✅ Integration with JWT service (other microservice)
-- ✅ User profile synchronization from Google
-- ✅ JWT token validation via JWT service
+12. **Logout:** `POST /auth/logout`
+    - Clears session cookies
+    - Returns success message
+
+**OAuth2/OIDC Features:**
+- ✅ OpenID Connect (OIDC) protocol implementation
+- ✅ Google OAuth2 integration for Columbia LionMail authentication
+- ✅ CSRF protection via `state` parameter
+- ✅ Session management with secure cookies (same_site="none" for Cloud Run, https_only=True)
+- ✅ Automatic user creation/update from Google profile information
+- ✅ Email-based account linking (links Google account to existing user by email)
+- ✅ JWT service integration (delegates token generation to separate microservice)
 
 **RESTful Features:**
 - ✅ ETag support for optimistic locking and caching
@@ -121,15 +143,9 @@ The `google_id` field has been added to the User model. Recreate the database or
    Visiting this endpoint in a browser will redirect to Google login page.
 
 2. **Callback Handling:**
-   After Google authentication, it automatically redirects to `/auth/google/callback` and returns user information.
+   After Google authentication, it automatically redirects to `/auth/google/callback`, creates/updates the user in the database, and redirects to the frontend homepage.
 
-3. **Get User Info After OAuth2 Callback:**
-   ```
-   GET /auth/google/callback
-   ```
-   Returns user information as JSON, or redirects if `state` parameter contains a URL
-
-4. **Get User Info with JWT Token:**
+3. **Get User Info with JWT Token:**
    ```
    GET /auth/me
    Authorization: Bearer <jwt-token-from-other-service>
