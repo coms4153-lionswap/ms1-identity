@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OAuth2 테스트 페이지</title>
+    <title>OAuth2 Test Page</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -105,86 +105,77 @@
 </head>
 <body>
     <div class="container">
-        <h1>🔐 OAuth2/OIDC 로그인 테스트</h1>
+        <h1>🔐 OAuth2/OIDC Login Test</h1>
         
         <div class="info-box">
-            <strong>📋 사용 방법:</strong>
+            <strong>📋 How to use:</strong>
             <ol>
-                <li>"Google로 로그인" 버튼 클릭</li>
-                <li>Google 계정으로 로그인 및 권한 승인</li>
-                <li>자동으로 로그인되며 세션이 쿠키에 저장됩니다</li>
-                <li>"내 정보 가져오기" 버튼으로 사용자 정보 확인</li>
-                <li>"로그아웃" 버튼으로 세션 종료</li>
+                <li>Click "Login with Google" button</li>
+                <li>Login with Google account and grant permissions</li>
+                <li>Automatically logged in and session saved in cookies</li>
+                <li>Click "Get My Info" button to view user information</li>
+                <li>Click "Logout" button to end session</li>
             </ol>
         </div>
 
-        <!-- 로그인 버튼 -->
         <div style="text-align: center; margin: 30px 0;">
-            <a href="/auth/google/login" class="button">🔵 Google로 로그인</a>
-            <button class="button button-secondary" onclick="getUserInfo()">👤 내 정보 가져오기</button>
-            <button class="button" onclick="logout()">🚪 로그아웃</button>
+            <a href="/auth/google/login" class="button">🔵 Login with Google</a>
+            <button class="button button-secondary" onclick="getUserInfo()">👤 Get My Info</button>
+            <button class="button" onclick="logout()">🚪 Logout</button>
         </div>
 
-        <!-- 사용자 정보 표시 영역 -->
         <div id="user-info-section" style="display: none;">
-            <h2>👤 사용자 정보</h2>
+            <h2>👤 User Information</h2>
             <div class="user-info" id="user-info"></div>
         </div>
 
-        <!-- 메시지 표시 영역 -->
         <div id="message-section"></div>
     </div>
 
     <script>
         const API_BASE_URL = window.location.origin;
 
-        // 페이지 로드 시 사용자 정보 확인
         window.onload = function() {
-            // 로그인 후 리다이렉트된 경우 사용자 정보 자동 로드
             getUserInfo();
         }
 
-        // 사용자 정보 가져오기 (쿠키의 세션 사용)
         async function getUserInfo() {
             try {
                 const response = await fetch(`${API_BASE_URL}/auth/me`, {
-                    credentials: 'include'  // 쿠키 포함
+                    credentials: 'include'
                 });
 
                 if (response.ok) {
                     const userData = await response.json();
                     displayUserInfo(userData);
-                    showMessage('사용자 정보를 성공적으로 가져왔습니다!', 'success');
+                    showMessage('User information retrieved successfully!', 'success');
                 } else if (response.status === 401) {
-                    // 로그인되지 않음
                     document.getElementById('user-info-section').style.display = 'none';
                 } else {
                     const error = await response.json();
-                    showMessage(`오류: ${error.detail || '사용자 정보를 가져올 수 없습니다.'}`, 'error');
+                    showMessage(`Error: ${error.detail || 'Unable to retrieve user information.'}`, 'error');
                 }
             } catch (error) {
-                showMessage(`오류: ${error.message}`, 'error');
+                showMessage(`Error: ${error.message}`, 'error');
             }
         }
 
-        // 사용자 정보 표시
         function displayUserInfo(user) {
             const userInfoDiv = document.getElementById('user-info');
             userInfoDiv.innerHTML = `
                 <h3>${user.student_name || user.uni}</h3>
                 <p><strong>UNI:</strong> ${user.uni}</p>
-                <p><strong>이메일:</strong> ${user.email}</p>
-                <p><strong>이름:</strong> ${user.student_name || 'N/A'}</p>
-                <p><strong>학과:</strong> ${user.dept_name || 'N/A'}</p>
-                <p><strong>전화번호:</strong> ${user.phone || 'N/A'}</p>
-                <p><strong>신뢰도 점수:</strong> ${user.credibility_score}</p>
+                <p><strong>Email:</strong> ${user.email}</p>
+                <p><strong>Name:</strong> ${user.student_name || 'N/A'}</p>
+                <p><strong>Department:</strong> ${user.dept_name || 'N/A'}</p>
+                <p><strong>Phone:</strong> ${user.phone || 'N/A'}</p>
+                <p><strong>Credibility Score:</strong> ${user.credibility_score}</p>
                 <p><strong>Google ID:</strong> ${user.google_id || 'N/A'}</p>
-                ${user.avatar_url ? `<p><img src="${user.avatar_url}" alt="프로필 사진" style="max-width: 100px; border-radius: 50%;"></p>` : ''}
+                ${user.avatar_url ? `<p><img src="${user.avatar_url}" alt="Profile Picture" style="max-width: 100px; border-radius: 50%;"></p>` : ''}
             `;
             document.getElementById('user-info-section').style.display = 'block';
         }
 
-        // 로그아웃
         async function logout() {
             try {
                 const response = await fetch(`${API_BASE_URL}/auth/logout`, {
@@ -194,22 +185,20 @@
 
                 if (response.ok) {
                     document.getElementById('user-info-section').style.display = 'none';
-                    showMessage('로그아웃되었습니다.', 'success');
+                    showMessage('Logged out successfully.', 'success');
                 } else {
-                    showMessage('로그아웃 중 오류가 발생했습니다.', 'error');
+                    showMessage('Error occurred during logout.', 'error');
                 }
             } catch (error) {
-                showMessage(`오류: ${error.message}`, 'error');
+                showMessage(`Error: ${error.message}`, 'error');
             }
         }
 
-        // 메시지 표시
         function showMessage(message, type) {
             const messageDiv = document.getElementById('message-section');
             const className = type === 'success' ? 'success' : 'error';
             messageDiv.innerHTML = `<div class="${className}">${message}</div>`;
             
-            // 5초 후 메시지 자동 제거
             setTimeout(() => {
                 messageDiv.innerHTML = '';
             }, 5000);
