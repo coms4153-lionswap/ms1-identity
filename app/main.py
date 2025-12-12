@@ -52,10 +52,14 @@ app.add_middleware(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://storage.googleapis.com"],
+    allow_origins=[
+        "https://lionswap-frontend-601351039154.us-east1.run.app",
+        "https://storage.googleapis.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["ETag"],
 )
 
 @app.on_event("startup")

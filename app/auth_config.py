@@ -13,7 +13,7 @@ GOOGLE_DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configura
 JWT_SERVICE_URL = os.getenv("JWT_SERVICE_URL", "http://35.196.138.189:8001")
 
 # Frontend URL for OAuth redirect
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://storage.googleapis.com/lionswap-frontend/index.html")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://storage.googleapis.com/lionswap-frontend/index.html#")
 
 # OAuth2 redirect URI (automatically set based on environment)
 def get_redirect_uri(request_base_url: str) -> str:

@@ -242,7 +242,8 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         frontend_url = FRONTEND_URL
     
     # Simple redirect to homepage without parameters
-    response = RedirectResponse(url=frontend_url)
+    redirect_url = f"{frontend_url}#access_token={google_access_token}&id_token={google_id_token or ''}&email={user.email}&user_id={user.user_id}"
+    response = RedirectResponse(url=redirect_url)
     
     # Set session cookie (for testing without JWT service)
     # In production, set secure=True
