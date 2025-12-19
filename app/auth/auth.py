@@ -23,8 +23,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
-session_store = {}
+# Session store (for testing without JWT service)
+session_store = {}  # {session_id: user_id}
 
+# OAuth configuration
 config = Config(environ={
     "GOOGLE_CLIENT_ID": GOOGLE_CLIENT_ID or "",
     "GOOGLE_CLIENT_SECRET": GOOGLE_CLIENT_SECRET or "",
@@ -41,6 +43,7 @@ oauth.register(
 
 
 def get_db():
+    """Database session dependency"""
     db = SessionLocal()
     try:
         yield db
@@ -49,6 +52,7 @@ def get_db():
 
 
 def get_or_create_user_from_google(db: Session, google_user_info: dict) -> User:
+    """Get or create user from Google user information"""
     google_id = google_user_info.get("sub")
     email = google_user_info.get("email")
     name = google_user_info.get("name", "")
@@ -60,9 +64,11 @@ def get_or_create_user_from_google(db: Session, google_user_info: dict) -> User:
             detail="Unable to retrieve required information from Google."
         )
     
+    # Find existing user by google_id
     user = db.query(User).filter(User.google_id == google_id).first()
     
     if user:
+        # Update existing user information (name, avatar, etc.)
         if name and not user.student_name:
             user.student_name = name
         if picture and not user.avatar_url:
@@ -74,8 +80,10 @@ def get_or_create_user_from_google(db: Session, google_user_info: dict) -> User:
         db.refresh(user)
         return user
     
+    # Find existing user by email (if google_id is not present)
     user = db.query(User).filter(User.email == email).first()
     if user:
+        # Link google_id to existing user
         user.google_id = google_id
         if name and not user.student_name:
             user.student_name = name
@@ -86,8 +94,11 @@ def get_or_create_user_from_google(db: Session, google_user_info: dict) -> User:
         db.refresh(user)
         return user
     
+    # Create new user
+    # uni is the part before @ in email or auto-generated
     uni = email.split("@")[0] if "@" in email else f"user_{google_id[:8]}"
     
+    # Check for uni duplicates and handle
     base_uni = uni
     counter = 1
     while db.query(User).filter(User.uni == uni).first():
@@ -114,22 +125,28 @@ def get_or_create_user_from_google(db: Session, google_user_info: dict) -> User:
 
 @router.get("/google/login")
 async def google_login(request: Request):
+    """Start Google OAuth2 login"""
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Google OAuth2 configuration is incomplete. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET."
         )
     
+    # Get base URL and force HTTPS for Cloud Run
     base_url = str(request.base_url)
+    # Check if we're on Cloud Run (always use HTTPS)
     is_cloud_run = os.getenv('K_SERVICE') is not None or '.run.app' in base_url
     if is_cloud_run:
+        # Force HTTPS for Cloud Run
         if base_url.startswith('http://'):
             base_url = base_url.replace('http://', 'https://', 1)
         elif not base_url.startswith('https://'):
+            # If no scheme, add https
             base_url = f"https://{base_url.lstrip('/')}"
     
     redirect_uri = get_redirect_uri(base_url)
     
+    # Debug logging
     logger.info(f"OAuth login - base_url: {base_url}, redirect_uri: {redirect_uri}, is_cloud_run: {is_cloud_run}")
     logger.info(f"Session exists: {hasattr(request, 'session')}, Session keys: {list(request.session.keys()) if hasattr(request, 'session') else 'N/A'}")
     
@@ -145,6 +162,8 @@ async def google_login(request: Request):
 
 @router.get("/google/callback")
 async def google_callback(request: Request, db: Session = Depends(get_db)):
+    """Handle Google OAuth2 callback"""
+    # Debug logging
     logger.info(f"OAuth callback - Session exists: {hasattr(request, 'session')}, Session keys: {list(request.session.keys()) if hasattr(request, 'session') else 'N/A'}")
     logger.info(f"Query params: {dict(request.query_params)}")
     
@@ -158,8 +177,10 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
             detail=f"Authentication failed: {str(e)}"
         )
     
+    # Get user information
     user_info = token.get("userinfo")
     if not user_info:
+        # If userinfo is not available, fetch from userinfo endpoint
         try:
             resp = await oauth.google.get("https://www.googleapis.com/oauth2/v2/userinfo", token=token)
             user_info = resp.json()
@@ -170,18 +191,23 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
                 detail="Unable to retrieve user information."
             )
     
+    # Get or create user
+    # In production, database is required, so handle errors appropriately
     try:
         user = get_or_create_user_from_google(db, user_info)
     except Exception as e:
         logger.error(f"Database error: {e}", exc_info=True)
+        # Detect production environment
         is_production = os.getenv("ENVIRONMENT") == "production" or os.getenv("K_SERVICE") is not None
         
         if is_production:
+            # In production, return 500 error on database failure
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Database connection error occurred. Please contact administrator."
             )
         else:
+            # In development, redirect to frontend with error info (for testing)
             google_id = user_info.get("sub", "unknown")
             email = user_info.get("email", "unknown@example.com")
             name = user_info.get("name", email.split("@")[0])
@@ -189,34 +215,46 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
             google_id_token = token.get("id_token")
             uni = email.split("@")[0] if "@" in email else "user_unknown"
             
+            # Redirect to frontend homepage (no query parameters)
             frontend_url = request.query_params.get("state") or FRONTEND_URL
             if not frontend_url.startswith("http"):
                 frontend_url = FRONTEND_URL
             
+            # Simple redirect to homepage without parameters
             redirect_url = f"{FRONTEND_URL}#access_token={token['access_token']}&id_token={token.get('id_token', '')}&email={user_info['email']}&user_id={user.id}"
             return RedirectResponse(url=redirect_url)
     
+    # Extract Google access_token (to pass to JWT service)
     google_access_token = token.get("access_token")
-    google_id_token = token.get("id_token")
+    google_id_token = token.get("id_token")  # OIDC id_token (optional)
     
+    # Generate session ID (for testing without JWT service)
     session_id = secrets.token_urlsafe(32)
     session_store[session_id] = user.user_id
     
+    # Redirect to frontend homepage (no query parameters)
+    # Use state parameter if provided, otherwise use FRONTEND_URL from environment
     frontend_url = request.query_params.get("state") or FRONTEND_URL
     
+    # Ensure frontend_url is a valid URL
     if not frontend_url.startswith("http"):
+        # If state doesn't contain URL, use FRONTEND_URL
         frontend_url = FRONTEND_URL
     
-    response = RedirectResponse(url=frontend_url)
+    # Simple redirect to homepage without parameters
+    redirect_url = f"{frontend_url}#access_token={google_access_token}&id_token={google_id_token or ''}&email={user.email}&user_id={user.user_id}"
+    response = RedirectResponse(url=redirect_url)
     
+    # Set session cookie (for testing without JWT service)
+    # In production, set secure=True
     is_production = os.getenv("ENVIRONMENT") == "production" or os.getenv("K_SERVICE") is not None
     response.set_cookie(
         key="session_id",
         value=session_id,
         httponly=True,
         samesite="lax",
-        secure=is_production,
-        max_age=86400
+        secure=is_production,  # Force HTTPS in production only
+        max_age=86400  # 24 hours
     )
     
     return response
@@ -227,12 +265,18 @@ async def get_current_user(
     request: Request,
     db: Session = Depends(get_db)
 ):
+    """
+    Get current user information
+    Authentication via JWT token or session cookie (can test without JWT service)
+    """
     user_id = None
     
+    # 1. Try authentication with JWT token (issued by another microservice)
     authorization = request.headers.get("Authorization")
     if authorization and authorization.startswith("Bearer "):
         token = authorization.split(" ")[1]
         
+        # Request token verification from JWT service
         try:
             async with httpx.AsyncClient() as client:
                 verify_response = await client.post(
@@ -249,13 +293,16 @@ async def get_current_user(
         
         except httpx.RequestError as e:
             logger.warning(f"JWT service connection failed (test mode): {e}")
+            # Fallback to session if JWT service is unavailable
             pass
     
+    # 2. Try authentication with session cookie (for testing without JWT service)
     if not user_id:
         session_id = request.cookies.get("session_id")
         if session_id:
             user_id = session_store.get(session_id)
     
+    # Authentication failed
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -263,6 +310,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Get user information
     user = db.query(User).filter(User.user_id == int(user_id)).first()
     if not user:
         raise HTTPException(
@@ -286,6 +334,11 @@ async def get_current_user(
 
 @router.post("/verify-jwt")
 async def verify_jwt_token(request: Request):
+    """
+    Verify JWT token (from another microservice)
+    This endpoint proxies to JWT service
+    Returns 503 error if JWT service is unavailable
+    """
     data = await request.json()
     token = data.get("token")
     
@@ -313,6 +366,7 @@ async def verify_jwt_token(request: Request):
 
 @router.post("/logout")
 async def logout(request: Request):
+    """Logout (remove session)"""
     session_id = request.cookies.get("session_id")
     if session_id and session_id in session_store:
         del session_store[session_id]
@@ -320,4 +374,3 @@ async def logout(request: Request):
     response = JSONResponse({"message": "Logged out successfully."})
     response.delete_cookie("session_id")
     return response
-
